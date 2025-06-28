@@ -21,6 +21,9 @@ This section outlines the design for a robust and scalable ingestion pipeline, a
 
 ### Architectural Overview
 
+![Architecture Diagram](arch.png)
+
+
 A scalable approach I think would be to decouple the file detection from the processing using a message queue. This allows for resilience and independent scaling of components.
 
 1.  **File Trigger**: A service (e.g., a simple cron job) detects new journal files in the designated secure location.
