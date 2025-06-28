@@ -19,6 +19,11 @@ class Chunk(BaseModel):
     link: str
     text: str
 
+class SimilaritySearchRequest(BaseModel):
+    query: str
+    k: int = 10
+    min_score: float = 0.25
+
 
 @router.put("/upload")
 async def upload_chunks(chunks: List[Chunk]):
@@ -47,6 +52,39 @@ async def upload_chunks(chunks: List[Chunk]):
         return {"message": f"Successfully uploaded and processed {len(chunks)} chunks to ChromaDB."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to add chunks to ChromaDB: {e}")
+
+
+@router.post("/similarity_search")
+async def similarity_search(request_body: SimilaritySearchRequest):
+    """Performs a similarity search on the ChromaDB collection."""
+    try:
+        results = services.query_chroma(request_body.query, request_body.k)
+        raw_hits = []
+        if results and results['documents'] and results['documents'][0]:
+            for i in range(len(results['documents'][0])):
+                doc = results['documents'][0][i]
+                distance = results['distances'][0][i]
+                metadata = results['metadatas'][0][i]
+                score = 1 - distance
+                if score >= request_body.min_score:
+                    raw_hits.append({
+                        "chunk_id": metadata.get("id"),
+                        "source_doc_id": metadata.get("source_doc_id"),
+                        "text": doc,
+                        "score": score,
+                    })
+        formatted_results = sorted(raw_hits, key=lambda x: x["score"], reverse=True)[:request_body.k]
+        chunk_ids_to_update = [hit["chunk_id"] for hit in formatted_results if hit.get("chunk_id")]
+        if chunk_ids_to_update:
+            services.update_usage_counts_in_chroma(chunk_ids_to_update)
+        return {
+            "query": request_body.query,
+            "k": request_body.k,
+            "min_score": request_body.min_score,
+            "results": formatted_results,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Similarity search failed: {e}")
 
 
 app.include_router(router, prefix=config.API_PREFIX)
