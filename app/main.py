@@ -87,6 +87,36 @@ async def similarity_search(request_body: SimilaritySearchRequest):
         raise HTTPException(status_code=500, detail=f"Similarity search failed: {e}")
 
 
+@router.get("/{journal_id}")
+async def get_journal_content(journal_id: str):
+    """Retrieves all chunks for a specific journal."""
+    try:
+        results = services.get_chunks_by_journal_id(journal_id)
+        if not results or not results['documents']:
+            raise HTTPException(status_code=404, detail=f"Journal with ID '{journal_id}' not found.")
+        matching_chunks = []
+        for i in range(len(results['documents'])):
+            doc = results['documents'][i]
+            metadata = results['metadatas'][i]
+            attributes_list = metadata.get("attributes", "").split(",") if metadata.get("attributes") else []
+            matching_chunks.append(Chunk(
+                id=metadata.get("id"),
+                source_doc_id=metadata.get("source_doc_id"),
+                chunk_index=metadata.get("chunk_index"),
+                section_heading=metadata.get("section_heading"),
+                doi=metadata.get("doi"),
+                journal=metadata.get("journal"),
+                publish_year=metadata.get("publish_year"),
+                usage_count=metadata.get("usage_count"),
+                attributes=attributes_list,
+                link=metadata.get("link"),
+                text=doc,
+            ))
+        return matching_chunks
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve journal content: {e}")
+
+
 app.include_router(router, prefix=config.API_PREFIX)
 
 
