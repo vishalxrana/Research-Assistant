@@ -87,6 +87,27 @@ async def similarity_search(request_body: SimilaritySearchRequest):
         raise HTTPException(status_code=500, detail=f"Similarity search failed: {e}")
 
 
+@router.get("/usage_statistics")
+async def get_usage_statistics():
+    """Retrieves usage statistics for all documents."""
+    try:
+        all_chunks = services.get_all_chunks_from_chroma()
+        usage_data = {}
+        if all_chunks and all_chunks['metadatas']:
+            for metadata in all_chunks['metadatas']:
+                source_doc_id = metadata.get("source_doc_id")
+                usage_count = metadata.get("usage_count", 0)
+                if source_doc_id:
+                    usage_data[source_doc_id] = usage_data.get(source_doc_id, 0) + usage_count
+        sorted_usage = sorted([
+            {"source_doc_id": doc_id, "total_usage_count": count}
+            for doc_id, count in usage_data.items()
+        ], key=lambda x: x["total_usage_count"], reverse=True)
+        return sorted_usage
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve usage statistics: {e}")
+
+
 @router.get("/{journal_id}")
 async def get_journal_content(journal_id: str):
     """Retrieves all chunks for a specific journal."""
